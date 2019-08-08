@@ -32,7 +32,7 @@ func main() {
 		args := os.Args
 		if len(args) > 1 && (args[1] == "-v" || args[1] == "-V" || args[1] == "--version") {
 			fmt.Println("Created by Hirbod Behnam")
-			fmt.Println("Source at ")
+			fmt.Println("Source at https://github.com/HirbodBehnam/PortForwarder")
 			fmt.Println("To use a custom file as config, just pass it to program")
 			fmt.Println("Version",Version)
 			os.Exit(0)
