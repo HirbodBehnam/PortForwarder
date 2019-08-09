@@ -11,7 +11,7 @@ Some of the features of this code are:
 ## Install
 Just head to [releases](https://github.com/HirbodBehnam/PortForwarder/releases) and download one for your os.
 ### Build from source
-Building this is not that hard. At first install [golang](https://golang.org/dl/) for your operating system. Clone this reposetory and run this command:
+Building this is not that hard. At first install [golang](https://golang.org/dl/) for your operating system. Clone this repository and run this command:
 ```bash
 go build main.go
 ```
@@ -41,7 +41,7 @@ There are two options:
 ## How it works?
 The base code is [this](https://gist.github.com/qhwa/cb9d3851450bff3b705e)(Thanks man!). The code is changed in order to measure the traffic transmitted.
 ### Soft Blocking
-So here is a part you should read. The proxy uses the `io.Copy` function([refrence](https://golang.org/pkg/io/#Copy)) in order to write the buffers. The good point is that the buffer is not with me and it is with the golang itself and there is no loop. But there is a catch: This function returns when it reaches the EOF or in case of an error.
+So here is a part you should read. The proxy uses the `io.Copy` function([reference](https://golang.org/pkg/io/#Copy)) in order to write the buffers. The good point is that the buffer is not with me and it is with the golang itself and there is no loop. But there is a catch: This function returns when it reaches the EOF or in case of an error.
 
 So what's wrong with this? Well, I can understand how many bytes had been transferred when the function returns. So here comes soft connections and fast forward in cost of inaccuracy.
 
