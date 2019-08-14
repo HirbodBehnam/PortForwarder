@@ -19,7 +19,7 @@ var ConfigFileName = "rules.json"
 const Version = "0.1.0 / Build 2"
 
 type Rule struct {
-	Listen  int
+	Listen  uint16
 	Forward string
 	Quota   int64
 }
@@ -62,7 +62,7 @@ func main() {
 				return
 			}
 			fmt.Println("Forwarding from", Rules[i].Listen, "port to", Rules[i].Forward)
-			ln, err := net.Listen("tcp", ":"+strconv.Itoa(Rules[i].Listen)) //Listen on port
+			ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(Rules[i].Listen))) //Listen on port
 			if err != nil {
 				panic(err)
 			}
