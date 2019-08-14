@@ -15,13 +15,15 @@ import (
 
 var Rules []Rule
 var ConfigFileName = "rules.json"
+var SimultaneousConnections = make([]int, 0)
 
 const Version = "0.1.0 / Build 2"
 
 type Rule struct {
-	Listen  uint16
-	Forward string
-	Quota   int64
+	Listen       uint16
+	Forward      string
+	Quota        int64
+	Simultaneous int
 }
 type Config struct {
 	SaveDuration int
@@ -54,6 +56,7 @@ func main() {
 		panic("Cannot read the config file. (Parse Error) " + err.Error())
 	}
 	Rules = conf.Rules
+	SimultaneousConnections = make([]int, len(Rules))
 
 	//Start listeners
 	for index := range Rules {
@@ -66,6 +69,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
+
 			for {
 				conn, err := ln.Accept() //The loop will be held here
 				if Rules[i].Quota < 0 {
@@ -103,6 +107,7 @@ func main() {
 	}()
 	fmt.Println("Ctrl + C to stop")
 	<-done
+
 	saveConfig(conf) //Save the config file one last time before exiting
 	fmt.Println("Exiting")
 }
@@ -122,12 +127,19 @@ func saveConfig(config Config) {
 }
 
 func handleRequest(conn net.Conn, index int) {
+	if Rules[index].Simultaneous != 0 && SimultaneousConnections[index] >= (Rules[index].Simultaneous*2) { //If we have reached quota just terminate the connection; 0 means no limits
+		_ = conn.Close()
+		return
+	}
+
 	proxy, err := net.Dial("tcp", Rules[index].Forward) //Open a connection to remote host
 	if err != nil {
 		println("Error on dialing remote host:", err.Error())
 		_ = conn.Close()
 		return
 	}
+
+	SimultaneousConnections[index] += 2 //Two is added; One for client to server and another for server to client
 
 	go copyIO(conn, proxy, index)
 	go copyIO(proxy, conn, index)
@@ -138,4 +150,5 @@ func copyIO(src, dest net.Conn, index int) {
 	defer dest.Close()
 	r, _ := io.Copy(src, dest) //r is the amount of bytes transferred
 	Rules[index].Quota -= r
+	SimultaneousConnections[index]-- //This will actually run twice
 }

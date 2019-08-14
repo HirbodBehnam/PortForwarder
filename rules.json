@@ -4,7 +4,8 @@
     {
       "Listen": 5362,
       "Forward": "1.1.1.1:53",
-      "Quota": 1073741824
+      "Quota": 1073741824,
+      "Simultaneous": 10
     }, 
     {
       "Listen": 5363,
