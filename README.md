@@ -35,7 +35,8 @@ The max quota value is `92233720368547758087`. You can use this.
 ### Arguments
 There are two options:
 1. `-h`: It prints out the help of the proxy.
-2. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
+2. `-v`: Verbose mode
+3. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
 ```bash
 ./PortForwarder --config custom_conf.json
 ```
