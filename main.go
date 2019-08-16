@@ -19,7 +19,7 @@ var ConfigFileName = "rules.json"
 var SimultaneousConnections = make([]int, 0)
 var Verbose = false
 
-const Version = "0.1.0 / Build 2"
+const Version = "0.2.0 / Build 3"
 
 type Rule struct {
 	Listen       uint16
