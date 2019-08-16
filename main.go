@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 var Rules []Rule
 var ConfigFileName = "rules.json"
 var SimultaneousConnections = make([]int, 0)
+var Verbose = false
 
 const Version = "0.1.0 / Build 2"
 
@@ -32,16 +34,20 @@ type Config struct {
 
 func main() {
 	{ //Parse arguments
-		args := os.Args
-		if len(args) > 1 && (args[1] == "-v" || args[1] == "-V" || args[1] == "--version") {
+		configFileName := flag.String("config", "rules.json", "The config filename")
+		verbose := flag.Bool("v", false, "Verbose mode")
+		help := flag.Bool("h", false, "Show help")
+		flag.Parse()
+
+		Verbose = *verbose
+		ConfigFileName = *configFileName
+
+		if *help {
 			fmt.Println("Created by Hirbod Behnam")
 			fmt.Println("Source at https://github.com/HirbodBehnam/PortForwarder")
-			fmt.Println("To use a custom file as config, just pass it to program")
 			fmt.Println("Version", Version)
+			flag.PrintDefaults()
 			os.Exit(0)
-		}
-		if len(args) > 1 { //Here the config filename is defined
-			ConfigFileName = args[1]
 		}
 	}
 
@@ -123,11 +129,16 @@ func saveConfig(config Config) {
 	if err != nil {
 		fmt.Println("Error re-writing rules: ", err)
 	}
-	fmt.Println("Saved the config file at ", time.Now().Format("2006-01-02 15:04:05"))
+	if Verbose {
+		fmt.Println("Saved the config file at ", time.Now().Format("2006-01-02 15:04:05"))
+	}
 }
 
 func handleRequest(conn net.Conn, index int) {
 	if Rules[index].Simultaneous != 0 && SimultaneousConnections[index] >= (Rules[index].Simultaneous*2) { //If we have reached quota just terminate the connection; 0 means no limits
+		if Verbose {
+			fmt.Println("Blocking new connection for port", Rules[index].Listen, "because the connection limit is reached. The current active connections count is", SimultaneousConnections[index]/2)
+		}
 		_ = conn.Close()
 		return
 	}
