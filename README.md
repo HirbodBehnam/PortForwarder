@@ -6,6 +6,7 @@ Some of the features of this code are:
 * **Lightweight**: It has no dependencies, just the main file, and standard library.
 * **Easy to use**: Just edit the rules file and you can use the proxy
 * **High performance**: With iperf3 I achieved 2.86 Gbits/sec in a local tunnel.
+* **Simultaneous Connections Limit**: Limit the amount of simultaneous _connections_ that a port can have.
 * **Soft Blocking**: Block the new incoming connections and keep the old ones alive when the quota reaches. [Read More]()
 
 ## Install
@@ -33,10 +34,10 @@ Well, you can't but actually you can!
 The max quota value is `92233720368547758087`. You can use this.
 ### Arguments
 There are two options:
-1. `-v`: It prints out the version of the proxy.
-2. `config.json`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
+1. `-h`: It prints out the help of the proxy.
+2. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
 ```bash
-./PortForwarder custom_conf.json
+./PortForwarder --config custom_conf.json
 ```
 ## How it works?
 The base code is [this](https://gist.github.com/qhwa/cb9d3851450bff3b705e)(Thanks man!). The code is changed in order to measure the traffic transmitted.
