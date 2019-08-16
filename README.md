@@ -7,7 +7,7 @@ Some of the features of this code are:
 * **Easy to use**: Just edit the rules file and you can use the proxy
 * **High performance**: With iperf3 I achieved 2.86 Gbits/sec in a local tunnel.
 * **Simultaneous Connections Limit**: Limit the amount of simultaneous _connections_ that a port can have.
-* **Soft Blocking**: Block the new incoming connections and keep the old ones alive when the quota reaches. [Read More]()
+* **Soft Blocking**: Block the new incoming connections and keep the old ones alive when the quota reaches. [Read More](#Soft-Blocking)
 
 ## Install
 Just head to [releases](https://github.com/HirbodBehnam/PortForwarder/releases) and download one for your os.
