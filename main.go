@@ -24,12 +24,12 @@ const Version = "0.2.0 / Build 3"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
-	mu                      sync.Mutex
+	mu                      sync.RWMutex
 }
 
 type CSafeRule struct {
 	Rules []Rule
-	mu    sync.Mutex
+	mu    sync.RWMutex
 }
 
 type Rule struct {
@@ -78,9 +78,9 @@ func main() {
 	//Start listeners
 	for index := range Rules.Rules {
 		go func(i int) {
-			Rules.mu.Lock()            //Lock it and clone it
+			Rules.mu.RLock()           //Lock it and clone it
 			loopRule := Rules.Rules[i] //Clone it
-			Rules.mu.Unlock()          //Let the other goroutines use it
+			Rules.mu.RUnlock()         //Let the other goroutines use it
 			if loopRule.Quota < 0 {    //If the quota is already reached why listen for connections?
 				return
 			}
@@ -92,9 +92,9 @@ func main() {
 
 			for {
 				conn, err := ln.Accept() //The loop will be held here
-				Rules.mu.Lock()          //Lock the mutex to just read the quota
+				Rules.mu.RLock()         //Lock the mutex to just read the quota
 				if Rules.Rules[i].Quota < 0 {
-					Rules.mu.Unlock()
+					Rules.mu.RUnlock()
 					fmt.Println("Quota reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
 					if err == nil {
 						_ = conn.Close()
@@ -102,7 +102,7 @@ func main() {
 					saveConfig(conf)
 					break
 				}
-				Rules.mu.Unlock()
+				Rules.mu.RUnlock()
 				if err != nil {
 					println("Error on accepting connection:", err.Error())
 					continue
@@ -136,9 +136,9 @@ func main() {
 }
 
 func saveConfig(config Config) {
-	Rules.mu.Lock() //Lock to clone the rules
+	Rules.mu.RLock() //Lock to clone the rules
 	config.Rules = Rules.Rules
-	Rules.mu.Unlock()
+	Rules.mu.RUnlock()
 	b, err := json.Marshal(config)
 	if err != nil {
 		fmt.Println("Error parsing rules: ", err)
@@ -155,16 +155,16 @@ func saveConfig(config Config) {
 
 func handleRequest(conn net.Conn, index int, r Rule) {
 	//Send a clone of rules to here to avoid need of locking mutex
-	SimultaneousConnections.mu.Lock()
+	SimultaneousConnections.mu.RLock()
 	if r.Simultaneous != 0 && SimultaneousConnections.SimultaneousConnections[index] >= (r.Simultaneous*2) { //If we have reached quota just terminate the connection; 0 means no limits
 		if Verbose {
 			fmt.Println("Blocking new connection for port", r.Listen, "because the connection limit is reached. The current active connections count is", SimultaneousConnections.SimultaneousConnections[index]/2)
 		}
-		SimultaneousConnections.mu.Unlock()
+		SimultaneousConnections.mu.RUnlock()
 		_ = conn.Close()
 		return
 	}
-	SimultaneousConnections.mu.Unlock()
+	SimultaneousConnections.mu.RUnlock()
 
 	proxy, err := net.Dial("tcp", r.Forward) //Open a connection to remote host
 	if err != nil {
