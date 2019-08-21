@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -51,6 +52,9 @@ func main() {
 		flag.Parse()
 
 		Verbose = *verbose
+		if Verbose {
+			fmt.Println("Verbose mode on")
+		}
 		ConfigFileName = *configFileName
 
 		if *help {
@@ -84,7 +88,7 @@ func main() {
 			if loopRule.Quota < 0 {    //If the quota is already reached why listen for connections?
 				return
 			}
-			fmt.Println("Forwarding from", loopRule.Listen, "port to", loopRule.Forward)
+			log.Println("Forwarding from", loopRule.Listen, "port to", loopRule.Forward)
 			ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(loopRule.Listen))) //Listen on port
 			if err != nil {
 				panic(err)
@@ -95,7 +99,7 @@ func main() {
 				Rules.mu.RLock()         //Lock the mutex to just read the quota
 				if Rules.Rules[i].Quota < 0 {
 					Rules.mu.RUnlock()
-					fmt.Println("Quota reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
+					log.Println("Quota reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
 					if err == nil {
 						_ = conn.Close()
 					}
@@ -132,7 +136,7 @@ func main() {
 	<-done
 
 	saveConfig(conf) //Save the config file one last time before exiting
-	fmt.Println("Exiting")
+	log.Println("Exiting")
 }
 
 func saveConfig(config Config) {
@@ -141,15 +145,15 @@ func saveConfig(config Config) {
 	Rules.mu.RUnlock()
 	b, err := json.Marshal(config)
 	if err != nil {
-		fmt.Println("Error parsing rules: ", err)
+		log.Println("Error parsing rules: ", err)
 		return
 	}
 	err = ioutil.WriteFile(ConfigFileName, b, 0644)
 	if err != nil {
-		fmt.Println("Error re-writing rules: ", err)
+		log.Println("Error re-writing rules: ", err)
 	}
 	if Verbose {
-		fmt.Println("Saved the config file at ", time.Now().Format("2006-01-02 15:04:05"))
+		log.Println("Saved the config")
 	}
 }
 
@@ -158,7 +162,7 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 	SimultaneousConnections.mu.RLock()
 	if r.Simultaneous != 0 && SimultaneousConnections.SimultaneousConnections[index] >= (r.Simultaneous*2) { //If we have reached quota just terminate the connection; 0 means no limits
 		if Verbose {
-			fmt.Println("Blocking new connection for port", r.Listen, "because the connection limit is reached. The current active connections count is", SimultaneousConnections.SimultaneousConnections[index]/2)
+			log.Println("Blocking new connection for port", r.Listen, "because the connection limit is reached. The current active connections count is", SimultaneousConnections.SimultaneousConnections[index]/2)
 		}
 		SimultaneousConnections.mu.RUnlock()
 		_ = conn.Close()
@@ -168,7 +172,7 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 
 	proxy, err := net.Dial("tcp", r.Forward) //Open a connection to remote host
 	if err != nil {
-		println("Error on dialing remote host:", err.Error())
+		log.Println("Error on dialing remote host:", err.Error())
 		_ = conn.Close()
 		return
 	}
