@@ -44,6 +44,14 @@ type Config struct {
 	Rules        []Rule
 }
 
+type AliveStatus struct {
+	LastAccess int64
+	con        *net.Conn
+}
+
+var LastAlive = make(map[uint64]*AliveStatus)
+var indexerAlive = uint64(0)
+
 func main() {
 	{ //Parse arguments
 		configFileName := flag.String("config", "rules.json", "The config filename")
@@ -78,6 +86,7 @@ func main() {
 	}
 	Rules.Rules = conf.Rules
 	SimultaneousConnections.SimultaneousConnections = make([]int, len(Rules.Rules))
+	//LastAlive = make([]AliveStatus,len(Rules.Rules))
 
 	//Start listeners
 	for index := range Rules.Rules {
@@ -115,6 +124,18 @@ func main() {
 			}
 		}(index)
 	}
+
+	//Keep alive status
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			for _, i := range LastAlive {
+				if i.LastAccess+5 < time.Now().Unix() {
+					(*i.con).Close() //Close the connection and the copyBuffer method will throw an error
+				}
+			}
+		}
+	}()
 
 	//Save config file
 	go func() {
@@ -179,17 +200,26 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index] += 2 //Two is added; One for client to server and another for server to client
+	fmt.Println("Accepting a connection; Now", SimultaneousConnections.SimultaneousConnections[index])
+	LastAlive[indexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
+	t := indexerAlive
+	indexerAlive++
 	SimultaneousConnections.mu.Unlock()
 
-	go copyIO(conn, proxy, index)
-	go copyIO(proxy, conn, index)
+	go copyIO(conn, proxy, index, t)
+	go copyIO(proxy, conn, index, t)
 }
 
-func copyIO(src, dest net.Conn, index int) {
+func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	defer src.Close()
 	defer dest.Close()
 
-	r, _ := io.Copy(src, dest) //r is the amount of bytes transferred
+	//r, _ := io.Copy(src, dest) //r is the amount of bytes transferred
+
+	r, err := copyBuffer(src, dest, aLiveIndex)
+	if err != nil {
+		fmt.Println("Error:", err.Error())
+	}
 
 	Rules.mu.Lock() //Lock to read the amount of data transferred
 	Rules.Rules[index].Quota -= r
@@ -197,5 +227,41 @@ func copyIO(src, dest net.Conn, index int) {
 
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index]-- //This will actually run twice
+	delete(LastAlive, aLiveIndex)
+	fmt.Println("Closing a connection;", SimultaneousConnections.SimultaneousConnections[index])
 	SimultaneousConnections.mu.Unlock()
+}
+
+func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
+	buf := make([]byte, 32768)
+	for {
+		if LastAlive[index] != nil {
+			LastAlive[index].LastAccess = time.Now().Unix()
+		}
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			if LastAlive[index] != nil {
+				LastAlive[index].LastAccess = time.Now().Unix()
+			}
+			nw, ew := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				err = ew
+				break
+			}
+			if nr != nw {
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return written, err
 }
