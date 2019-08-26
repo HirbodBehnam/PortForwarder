@@ -1,5 +1,6 @@
 {
   "SaveDuration": 600,
+  "Timeout": -1,
   "Rules": [
     {
       "Listen": 5362,

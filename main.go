@@ -36,23 +36,25 @@ type CSafeRule struct {
 type Rule struct {
 	Listen       uint16
 	Forward      string
-	Quota        int64
+	Quota        uint64
 	Simultaneous int
 }
 type Config struct {
 	SaveDuration int
-	Timeout      int
+	Timeout      int64
 	TimeoutCheck int
 	Rules        []Rule
 }
 
 type AliveStatus struct {
+	mu         sync.Mutex
 	LastAccess int64
 	con        *net.Conn
 }
 
 var LastAlive = make(map[uint64]*AliveStatus)
-var indexerAlive = uint64(0)
+var IndexerAlive = uint64(0)
+var EnableTimeOut = true
 
 func main() {
 	{ //Parse arguments
@@ -77,17 +79,22 @@ func main() {
 	}
 
 	//Read config file
-	confF, err := ioutil.ReadFile(ConfigFileName)
-	if err != nil {
-		panic("Cannot read the config file. (io Error) " + err.Error())
-	}
 	var conf Config
-	err = json.Unmarshal(confF, &conf)
-	if err != nil {
-		panic("Cannot read the config file. (Parse Error) " + err.Error())
+	{
+		confF, err := ioutil.ReadFile(ConfigFileName)
+		if err != nil {
+			panic("Cannot read the config file. (io Error) " + err.Error())
+		}
+		err = json.Unmarshal(confF, &conf)
+		if err != nil {
+			panic("Cannot read the config file. (Parse Error) " + err.Error())
+		}
+		Rules.Rules = conf.Rules
+		if conf.Timeout == -1 {
+			fmt.Println("Disabled timeout")
+			EnableTimeOut = false
+		}
 	}
-	Rules.Rules = conf.Rules
-	SimultaneousConnections.SimultaneousConnections = make([]int, len(Rules.Rules))
 
 	//Start listeners
 	for index := range Rules.Rules {
@@ -128,21 +135,26 @@ func main() {
 
 	//Keep alive status
 	go func() {
+		if !EnableTimeOut {
+			return
+		}
 		//At first check for timeout values; if they are zero assign defaults
-		timeout := int64(conf.Timeout)
-		if timeout == 0 {
-			timeout = 600 //Ten minute timeout
+		timeout := conf.Timeout
+		if conf.Timeout == 0 {
+			timeout = 900 //15 minute timeout
+			conf.Timeout = 900
 		}
 		checkDuration := conf.TimeoutCheck
 		if checkDuration == 0 {
 			checkDuration = 60 //Every minute check if the connections are still alive
+			conf.TimeoutCheck = 60
 		}
 		for {
 			time.Sleep(time.Duration(checkDuration) * time.Second)
-			for _, i := range LastAlive {
+			for index, i := range LastAlive {
 				if i.LastAccess+timeout < time.Now().Unix() {
 					if Verbose {
-						log.Println("Dropping a dead connection from", (*i.con).RemoteAddr(), "; The last accessed time is", time.Unix(i.LastAccess, 0))
+						log.Println("Dropping a dead connection from", (*i.con).RemoteAddr(), ";", index, "; The last accessed time is", time.Unix(i.LastAccess, 0).Format("2006-01-02 15:04:05"))
 					}
 					(*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
 				}
@@ -155,6 +167,7 @@ func main() {
 		sd := conf.SaveDuration
 		if sd == 0 {
 			sd = 600
+			conf.SaveDuration = 600
 		}
 		for {
 			time.Sleep(time.Duration(sd) * time.Second) //Save file every x seconds
@@ -220,9 +233,9 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 	if Verbose {
 		log.Println("Accepting a connection from", conn.RemoteAddr(), "; Now", SimultaneousConnections.SimultaneousConnections[index], "SimultaneousConnections")
 	}
-	LastAlive[indexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
-	t := indexerAlive
-	indexerAlive++
+	LastAlive[IndexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
+	t := IndexerAlive
+	IndexerAlive++
 	SimultaneousConnections.mu.Unlock()
 
 	go copyIO(conn, proxy, index, t)
@@ -233,9 +246,17 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	defer src.Close()
 	defer dest.Close()
 
-	//r, _ := io.Copy(src, dest) //r is the amount of bytes transferred
+	var r uint64 //r is the amount of bytes transferred
+	var err error
 
-	r, err := copyBuffer(src, dest, aLiveIndex)
+	if EnableTimeOut {
+		r, err = copyBuffer(src, dest, aLiveIndex)
+	} else {
+		var r1 int64
+		r1, err = io.Copy(src, dest)
+		r = uint64(r1)
+	}
+
 	if Verbose && err != nil {
 		log.Println("Error on copyBuffer(Usually happens):", err.Error())
 	}
@@ -253,20 +274,16 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	SimultaneousConnections.mu.Unlock()
 }
 
-func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
+func copyBuffer(dst, src net.Conn, index uint64) (written uint64, err error) {
 	buf := make([]byte, 32768)
 	for {
-		if LastAlive[index] != nil {
-			LastAlive[index].LastAccess = time.Now().Unix()
-		}
+		go updateDate(index)
 		nr, er := src.Read(buf)
 		if nr > 0 {
-			if LastAlive[index] != nil {
-				LastAlive[index].LastAccess = time.Now().Unix()
-			}
+			go updateDate(index)
 			nw, ew := dst.Write(buf[0:nr])
 			if nw > 0 {
-				written += int64(nw)
+				written += uint64(nw)
 			}
 			if ew != nil {
 				err = ew
@@ -285,4 +302,12 @@ func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
 		}
 	}
 	return written, err
+}
+
+func updateDate(index uint64) {
+	if LastAlive[index] != nil {
+		LastAlive[index].mu.Lock()
+		LastAlive[index].LastAccess = time.Now().Unix()
+		LastAlive[index].mu.Unlock()
+	}
 }
