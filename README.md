@@ -22,6 +22,8 @@ Did you download the executable for your os? Good!
 
 Edit the `rules.json` file as you wish. Here is the cheatsheet for it:
 * `SaveDuration`: The program writes the quotas to disk every `SaveDuration` seconds. Default is 600 seconds or 10 minutes.
+* `Timeout`: The time in seconds that a connection can stay alive without transmitting any data. Default is ten minutes.
+* `TimeoutCheck`: The time in seconds to check if connections are still alive. Default is 60 seconds.
 * `Rules` Array: Each element represents a forwarding rule and quota for it.
     * `Listen`: The local port to accept the incoming connections for proxy.
     * `Forward`: The address that the traffic must be forwarded to. Enter it like `ip:port`
@@ -51,6 +53,11 @@ So what's wrong with this? Well, I can understand how many bytes had been transf
 As soon as the function returns, I the quota will change.
 
 And what do I mean about the softer connections? The client can use the program after the quota is reached. When the client wants to establish a new connection it will be rejected from the server. Plus you can manage how much client has used more than its quota.
+
+### Timeout
+I implemented a custom timeout method for this. It is dead simple:
+
+Save the last time each _connection_ has transmitted something. (On each write or read function). Then every minute(default), the app reads all of the last transmit time. If it is larger than (now - timeout), close the connection.
 
 ## Other Stuff
 [Persian guild to setup this with mtproto](http://www.mediafire.com/file/4u3khp5oj7ecgxk/%25D9%2585%25D8%25AD%25D8%25AF%25D9%2588%25D8%25AF_%25DA%25A9%25D8%25B1%25D8%25AF%25D9%2586_%25DA%25A9%25D8%25A7%25D8%25B1%25D8%25A8%25D8%25B1%25D8%25A7%25D9%2586.pdf/file)

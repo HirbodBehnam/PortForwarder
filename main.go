@@ -41,6 +41,8 @@ type Rule struct {
 }
 type Config struct {
 	SaveDuration int
+	Timeout      int
+	TimeoutCheck int
 	Rules        []Rule
 }
 
@@ -86,7 +88,6 @@ func main() {
 	}
 	Rules.Rules = conf.Rules
 	SimultaneousConnections.SimultaneousConnections = make([]int, len(Rules.Rules))
-	//LastAlive = make([]AliveStatus,len(Rules.Rules))
 
 	//Start listeners
 	for index := range Rules.Rules {
@@ -127,11 +128,23 @@ func main() {
 
 	//Keep alive status
 	go func() {
+		//At first check for timeout values; if they are zero assign defaults
+		timeout := int64(conf.Timeout)
+		if timeout == 0 {
+			timeout = 600 //Ten minute timeout
+		}
+		checkDuration := conf.TimeoutCheck
+		if checkDuration == 0 {
+			checkDuration = 60 //Every minute check if the connections are still alive
+		}
 		for {
-			time.Sleep(10 * time.Second)
+			time.Sleep(time.Duration(checkDuration) * time.Second)
 			for _, i := range LastAlive {
-				if i.LastAccess+5 < time.Now().Unix() {
-					(*i.con).Close() //Close the connection and the copyBuffer method will throw an error
+				if i.LastAccess+timeout < time.Now().Unix() {
+					if Verbose {
+						log.Println("Dropping a dead connection from", (*i.con).RemoteAddr(), "; The last accessed time is", time.Unix(i.LastAccess, 0))
+					}
+					(*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
 				}
 			}
 		}
@@ -139,8 +152,12 @@ func main() {
 
 	//Save config file
 	go func() {
+		sd := conf.SaveDuration
+		if sd == 0 {
+			sd = 600
+		}
 		for {
-			time.Sleep(time.Duration(conf.SaveDuration) * time.Second) //Save file every x seconds
+			time.Sleep(time.Duration(sd) * time.Second) //Save file every x seconds
 			saveConfig(conf)
 		}
 	}()
@@ -200,7 +217,9 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index] += 2 //Two is added; One for client to server and another for server to client
-	fmt.Println("Accepting a connection; Now", SimultaneousConnections.SimultaneousConnections[index])
+	if Verbose {
+		log.Println("Accepting a connection from", conn.RemoteAddr(), "; Now", SimultaneousConnections.SimultaneousConnections[index], "SimultaneousConnections")
+	}
 	LastAlive[indexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
 	t := indexerAlive
 	indexerAlive++
@@ -217,8 +236,8 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	//r, _ := io.Copy(src, dest) //r is the amount of bytes transferred
 
 	r, err := copyBuffer(src, dest, aLiveIndex)
-	if err != nil {
-		fmt.Println("Error:", err.Error())
+	if Verbose && err != nil {
+		log.Println("Error on copyBuffer(Usually happens):", err.Error())
 	}
 
 	Rules.mu.Lock() //Lock to read the amount of data transferred
@@ -228,7 +247,9 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index]-- //This will actually run twice
 	delete(LastAlive, aLiveIndex)
-	fmt.Println("Closing a connection;", SimultaneousConnections.SimultaneousConnections[index])
+	if Verbose {
+		log.Println("Closing a connection from", src.RemoteAddr(), "; Connections Now:", SimultaneousConnections.SimultaneousConnections[index])
+	}
 	SimultaneousConnections.mu.Unlock()
 }
 
