@@ -21,7 +21,7 @@ var ConfigFileName = "rules.json"
 var SimultaneousConnections CSafeConnections
 var Verbose = false
 
-const Version = "1.0.0 / Build 4"
+const Version = "1.1.0 / Build 5"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
