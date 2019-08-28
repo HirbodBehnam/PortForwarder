@@ -29,6 +29,7 @@ Edit the `rules.json` file as you wish. Here is the cheatsheet for it:
     * `Forward`: The address that the traffic must be forwarded to. Enter it like `ip:port`
     * `Quota`: The number of bytes the user can transfer.
     * `Simultaneous`: Amount of allowed simultaneous connections to this port. Use 0, or remove it for unlimited.
+    * `ExpireDate`: When this rule must expire? In unix epoch, UTC. You can use [this site](https://www.epochconverter.com/) to convert date to unix epoch.
     
 Save the file and just open the main executable to run the proxy.
 ### Unlimited Quota

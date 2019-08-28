@@ -21,7 +21,7 @@ var ConfigFileName = "rules.json"
 var SimultaneousConnections CSafeConnections
 var Verbose = false
 
-const Version = "1.1.0 / Build 5"
+const Version = "1.2.0 / Build 6"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
@@ -37,6 +37,7 @@ type Rule struct {
 	Listen       uint16
 	Forward      string
 	Quota        uint64
+	ExpireDate   int64
 	Simultaneous int
 }
 type Config struct {
@@ -85,6 +86,7 @@ func main() {
 		if err != nil {
 			panic("Cannot read the config file. (io Error) " + err.Error())
 		}
+
 		err = json.Unmarshal(confF, &conf)
 		if err != nil {
 			panic("Cannot read the config file. (Parse Error) " + err.Error())
@@ -102,9 +104,16 @@ func main() {
 			Rules.mu.RLock()           //Lock it and clone it
 			loopRule := Rules.Rules[i] //Clone it
 			Rules.mu.RUnlock()         //Let the other goroutines use it
-			if loopRule.Quota < 0 {    //If the quota is already reached why listen for connections?
+
+			if loopRule.Quota < 0 { //If the quota is already reached why listen for connections?
+				fmt.Println("Skip enabling forward on port", loopRule.Listen, "because the quota is reached.")
 				return
 			}
+			if Rules.Rules[i].ExpireDate != 0 && Rules.Rules[i].ExpireDate < time.Now().Unix() {
+				fmt.Println("Skip enabling forward on port", loopRule.Listen, "because this rule is expired.")
+				return
+			}
+
 			log.Println("Forwarding from", loopRule.Listen, "port to", loopRule.Forward)
 			ln, err := net.Listen("tcp", ":"+strconv.Itoa(int(loopRule.Listen))) //Listen on port
 			if err != nil {
@@ -113,8 +122,9 @@ func main() {
 
 			for {
 				conn, err := ln.Accept() //The loop will be held here
-				Rules.mu.RLock()         //Lock the mutex to just read the quota
-				if Rules.Rules[i].Quota < 0 {
+
+				Rules.mu.RLock()              //Lock the mutex to just read the quota
+				if Rules.Rules[i].Quota < 0 { //Check the quota
 					Rules.mu.RUnlock()
 					log.Println("Quota reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
 					if err == nil {
@@ -123,11 +133,22 @@ func main() {
 					saveConfig(conf)
 					break
 				}
+				if Rules.Rules[i].ExpireDate != 0 && Rules.Rules[i].ExpireDate < time.Now().Unix() {
+					Rules.mu.RUnlock()
+					log.Println("Expire date reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
+					if err == nil {
+						_ = conn.Close()
+					}
+					saveConfig(conf)
+					break
+				}
+
 				Rules.mu.RUnlock()
 				if err != nil {
 					println("Error on accepting connection:", err.Error())
 					continue
 				}
+
 				go handleRequest(conn, i, loopRule)
 			}
 		}(index)
@@ -156,7 +177,7 @@ func main() {
 					if Verbose {
 						log.Println("Dropping a dead connection from", (*i.con).RemoteAddr(), ";", index, "; The last accessed time is", time.Unix(i.LastAccess, 0).Format("2006-01-02 15:04:05"))
 					}
-					(*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
+					_ = (*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
 				}
 			}
 		}
@@ -194,11 +215,13 @@ func saveConfig(config Config) {
 	Rules.mu.RLock() //Lock to clone the rules
 	config.Rules = Rules.Rules
 	Rules.mu.RUnlock()
+
 	b, err := json.Marshal(config)
 	if err != nil {
 		log.Println("Error parsing rules: ", err)
 		return
 	}
+
 	err = ioutil.WriteFile(ConfigFileName, b, 0644)
 	if err != nil {
 		log.Println("Error re-writing rules: ", err)
