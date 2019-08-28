@@ -21,7 +21,7 @@ var ConfigFileName = "rules.json"
 var SimultaneousConnections CSafeConnections
 var Verbose = false
 
-const Version = "1.1.0 / Build 5"
+const Version = "1.2.0 / Build 6"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
@@ -177,7 +177,7 @@ func main() {
 					if Verbose {
 						log.Println("Dropping a dead connection from", (*i.con).RemoteAddr(), ";", index, "; The last accessed time is", time.Unix(i.LastAccess, 0).Format("2006-01-02 15:04:05"))
 					}
-					(*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
+					_ = (*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
 				}
 			}
 		}
