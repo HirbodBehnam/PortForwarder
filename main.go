@@ -36,7 +36,7 @@ type CSafeRule struct {
 type Rule struct {
 	Listen       uint16
 	Forward      string
-	Quota        uint64
+	Quota        int64
 	ExpireDate   int64
 	Simultaneous int
 }
@@ -269,15 +269,13 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	defer src.Close()
 	defer dest.Close()
 
-	var r uint64 //r is the amount of bytes transferred
+	var r int64 //r is the amount of bytes transferred
 	var err error
 
 	if EnableTimeOut {
 		r, err = copyBuffer(src, dest, aLiveIndex)
 	} else {
-		var r1 int64
-		r1, err = io.Copy(src, dest)
-		r = uint64(r1)
+		r, err = io.Copy(src, dest)
 	}
 
 	if Verbose && err != nil {
@@ -297,7 +295,7 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	SimultaneousConnections.mu.Unlock()
 }
 
-func copyBuffer(dst, src net.Conn, index uint64) (written uint64, err error) {
+func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
 	buf := make([]byte, 32768)
 	for {
 		go updateDate(index)
@@ -306,7 +304,7 @@ func copyBuffer(dst, src net.Conn, index uint64) (written uint64, err error) {
 			go updateDate(index)
 			nw, ew := dst.Write(buf[0:nr])
 			if nw > 0 {
-				written += uint64(nw)
+				written += int64(nw)
 			}
 			if ew != nil {
 				err = ew
