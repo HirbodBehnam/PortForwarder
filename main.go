@@ -21,7 +21,7 @@ var ConfigFileName = "rules.json"
 var SimultaneousConnections CSafeConnections
 var Verbose = false
 
-const Version = "1.2.0 / Build 6"
+const Version = "1.2.1 / Build 7"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
@@ -91,7 +91,9 @@ func main() {
 		if err != nil {
 			panic("Cannot read the config file. (Parse Error) " + err.Error())
 		}
+
 		Rules.Rules = conf.Rules
+		SimultaneousConnections.SimultaneousConnections = make([]int, len(Rules.Rules))
 		if conf.Timeout == -1 {
 			fmt.Println("Disabled timeout")
 			EnableTimeOut = false
