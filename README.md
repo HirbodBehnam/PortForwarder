@@ -5,7 +5,7 @@ This a small program to forward ports with a quota option to control the data us
 Some of the features of this code are:
 * **Lightweight**: It has no dependencies, just the main file, and standard library.
 * **Easy to use**: Just edit the rules file and you can use the proxy
-* **High performance**: With iperf3 I achieved 2.86 Gbits/sec in a local tunnel.
+* **High performance**: With iperf3 I achieved 14.9 Gbits/sec in a local tunnel.
 * **Simultaneous Connections Limit**: Limit the amount of simultaneous _connections_ that a port can have.
 * **Soft Blocking**: Block the new incoming connections and keep the old ones alive when the quota reaches. [Read More](#Soft-Blocking)
 
