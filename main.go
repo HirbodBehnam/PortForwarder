@@ -48,7 +48,6 @@ type Config struct {
 }
 
 type AliveStatus struct {
-	mu         sync.Mutex
 	LastAccess int64
 	con        *net.Conn
 }
@@ -64,12 +63,6 @@ func main() {
 		help := flag.Bool("h", false, "Show help")
 		flag.Parse()
 
-		Verbose = *verbose
-		if Verbose {
-			fmt.Println("Verbose mode on")
-		}
-		ConfigFileName = *configFileName
-
 		if *help {
 			fmt.Println("Created by Hirbod Behnam")
 			fmt.Println("Source at https://github.com/HirbodBehnam/PortForwarder")
@@ -77,6 +70,12 @@ func main() {
 			flag.PrintDefaults()
 			os.Exit(0)
 		}
+
+		Verbose = *verbose
+		if Verbose {
+			fmt.Println("Verbose mode on")
+		}
+		ConfigFileName = *configFileName
 	}
 
 	//Read config file
@@ -329,8 +328,6 @@ func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
 
 func updateDate(index uint64) {
 	if LastAlive[index] != nil {
-		LastAlive[index].mu.Lock()
 		LastAlive[index].LastAccess = time.Now().Unix()
-		LastAlive[index].mu.Unlock()
 	}
 }
