@@ -53,6 +53,7 @@ type AliveStatus struct {
 }
 
 var LastAlive = make(map[uint64]*AliveStatus)
+var LastAliveMutex sync.Mutex
 var IndexerAlive = uint64(0)
 var EnableTimeOut = true
 
@@ -100,17 +101,13 @@ func main() {
 	}
 
 	//Start listeners
-	for index := range Rules.Rules {
-		go func(i int) {
-			Rules.mu.RLock()           //Lock it and clone it
-			loopRule := Rules.Rules[i] //Clone it
-			Rules.mu.RUnlock()         //Let the other goroutines use it
-
+	for index, rule := range Rules.Rules {
+		go func(i int, loopRule Rule) {
 			if loopRule.Quota < 0 { //If the quota is already reached why listen for connections?
 				fmt.Println("Skip enabling forward on port", loopRule.Listen, "because the quota is reached.")
 				return
 			}
-			if Rules.Rules[i].ExpireDate != 0 && Rules.Rules[i].ExpireDate < time.Now().Unix() {
+			if loopRule.ExpireDate != 0 && loopRule.ExpireDate < time.Now().Unix() {
 				fmt.Println("Skip enabling forward on port", loopRule.Listen, "because this rule is expired.")
 				return
 			}
@@ -127,7 +124,7 @@ func main() {
 				Rules.mu.RLock()              //Lock the mutex to just read the quota
 				if Rules.Rules[i].Quota < 0 { //Check the quota
 					Rules.mu.RUnlock()
-					log.Println("Quota reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
+					log.Println("Quota reached for port", loopRule.Listen, "pointing to", loopRule.Forward)
 					if err == nil {
 						_ = conn.Close()
 					}
@@ -136,7 +133,7 @@ func main() {
 				}
 				if Rules.Rules[i].ExpireDate != 0 && Rules.Rules[i].ExpireDate < time.Now().Unix() {
 					Rules.mu.RUnlock()
-					log.Println("Expire date reached for port", loopRule.Forward, "pointing to", loopRule.Forward)
+					log.Println("Expire date reached for port", loopRule.Listen, "pointing to", loopRule.Forward)
 					if err == nil {
 						_ = conn.Close()
 					}
@@ -152,7 +149,7 @@ func main() {
 
 				go handleRequest(conn, i, loopRule)
 			}
-		}(index)
+		}(index, rule)
 	}
 
 	//Keep alive status
@@ -173,6 +170,7 @@ func main() {
 		}
 		for {
 			time.Sleep(time.Duration(checkDuration) * time.Second)
+			LastAliveMutex.Lock()
 			for index, i := range LastAlive {
 				if i.LastAccess+timeout < time.Now().Unix() {
 					if Verbose {
@@ -181,6 +179,7 @@ func main() {
 					_ = (*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
 				}
 			}
+			LastAliveMutex.Unlock()
 		}
 	}()
 
@@ -215,9 +214,8 @@ func main() {
 func saveConfig(config Config) {
 	Rules.mu.RLock() //Lock to clone the rules
 	config.Rules = Rules.Rules
-	Rules.mu.RUnlock()
-
 	b, err := json.Marshal(config)
+	Rules.mu.RUnlock()
 	if err != nil {
 		log.Println("Error parsing rules: ", err)
 		return
@@ -257,7 +255,11 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 	if Verbose {
 		log.Println("Accepting a connection from", conn.RemoteAddr(), "; Now", SimultaneousConnections.SimultaneousConnections[index], "SimultaneousConnections")
 	}
+
+	LastAliveMutex.Lock()
 	LastAlive[IndexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
+	LastAliveMutex.Unlock()
+
 	t := IndexerAlive
 	IndexerAlive++
 	SimultaneousConnections.mu.Unlock()
@@ -283,13 +285,17 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 		log.Println("Error on copyBuffer(Usually happens):", err.Error())
 	}
 
-	Rules.mu.Lock() //Lock to read the amount of data transferred
+	Rules.mu.Lock() //Lock to change the amount of data transferred
 	Rules.Rules[index].Quota -= r
 	Rules.mu.Unlock()
 
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index]-- //This will actually run twice
+
+	LastAliveMutex.Lock()
 	delete(LastAlive, aLiveIndex)
+	LastAliveMutex.Unlock()
+
 	if Verbose {
 		log.Println("Closing a connection from", src.RemoteAddr(), "; Connections Now:", SimultaneousConnections.SimultaneousConnections[index])
 	}
@@ -327,7 +333,9 @@ func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
 }
 
 func updateDate(index uint64) {
-	if LastAlive[index] != nil {
+	LastAliveMutex.Lock()
+	if _, ok := LastAlive[index]; ok {
 		LastAlive[index].LastAccess = time.Now().Unix()
 	}
+	LastAliveMutex.Unlock()
 }
