@@ -39,10 +39,27 @@ The max quota value is `92233720368547758087`. You can use this.
 ### Arguments
 There are two options:
 1. `-h`: It prints out the help of the proxy.
-2. `-v`: Verbose mode
+2. `-verbose`: Verbose mode (A number between 0 to 4)
 3. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
 ```bash
 ./PortForwarder --config custom_conf.json
+```
+#### Verbose modes
+You have 5 options
+
+`0` means that the applications is mostly silent and prints fatal errors.
+
+`1` means regular errors and infos are shown. (This is the default value)
+
+`2` means it also prints when a user hits connection limit
+
+`3` means it also prints a log when a connection timeouts
+
+`4` means it prints every log possible. Use to debug
+
+Example:
+```bash
+./PortForwarder --verbose 2
 ```
 ## How it works?
 The base code is [this](https://gist.github.com/qhwa/cb9d3851450bff3b705e)(Thanks man!). The code is changed in order to measure the traffic transmitted.

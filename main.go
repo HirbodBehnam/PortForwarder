@@ -16,12 +16,13 @@ import (
 	"time"
 )
 
+//More global values
 var Rules CSafeRule
 var ConfigFileName = "rules.json"
 var SimultaneousConnections CSafeConnections
-var Verbose = false
+var Verbose = 1
 
-const Version = "1.2.2 / Build 8"
+const Version = "1.3.0 / Build 9"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
@@ -52,6 +53,7 @@ type AliveStatus struct {
 	con        *net.Conn
 }
 
+//Timeout values
 var LastAlive = make(map[uint64]*AliveStatus)
 var LastAliveMutex sync.Mutex
 var IndexerAlive = uint64(0)
@@ -60,7 +62,7 @@ var EnableTimeOut = true
 func main() {
 	{ //Parse arguments
 		configFileName := flag.String("config", "rules.json", "The config filename")
-		verbose := flag.Bool("v", false, "Verbose mode")
+		verbose := flag.Int("verbose", 1, "Verbose level: 0->None(Mostly Silent), 1->Quota reached, expiry date and typical errors, 2->Connection flood 3->Timeout drops 4->All logs and errors")
 		help := flag.Bool("h", false, "Show help")
 		flag.Parse()
 
@@ -73,8 +75,8 @@ func main() {
 		}
 
 		Verbose = *verbose
-		if Verbose {
-			fmt.Println("Verbose mode on")
+		if Verbose != 0 {
+			fmt.Println("Verbose mode on level", Verbose)
 		}
 		ConfigFileName = *configFileName
 	}
@@ -95,7 +97,7 @@ func main() {
 		Rules.Rules = conf.Rules
 		SimultaneousConnections.SimultaneousConnections = make([]int, len(Rules.Rules))
 		if conf.Timeout == -1 {
-			fmt.Println("Disabled timeout")
+			logVerbose(1, "Disabled timeout")
 			EnableTimeOut = false
 		}
 	}
@@ -104,11 +106,11 @@ func main() {
 	for index, rule := range Rules.Rules {
 		go func(i int, loopRule Rule) {
 			if loopRule.Quota < 0 { //If the quota is already reached why listen for connections?
-				fmt.Println("Skip enabling forward on port", loopRule.Listen, "because the quota is reached.")
+				log.Println("Skip enabling forward on port", loopRule.Listen, "because the quota is reached.")
 				return
 			}
 			if loopRule.ExpireDate != 0 && loopRule.ExpireDate < time.Now().Unix() {
-				fmt.Println("Skip enabling forward on port", loopRule.Listen, "because this rule is expired.")
+				log.Println("Skip enabling forward on port", loopRule.Listen, "because this rule is expired.")
 				return
 			}
 
@@ -124,7 +126,7 @@ func main() {
 				Rules.mu.RLock()              //Lock the mutex to just read the quota
 				if Rules.Rules[i].Quota < 0 { //Check the quota
 					Rules.mu.RUnlock()
-					log.Println("Quota reached for port", loopRule.Listen, "pointing to", loopRule.Forward)
+					logVerbose(1, "Quota reached for port", loopRule.Listen, "pointing to", loopRule.Forward)
 					if err == nil {
 						_ = conn.Close()
 					}
@@ -133,15 +135,15 @@ func main() {
 				}
 				if Rules.Rules[i].ExpireDate != 0 && Rules.Rules[i].ExpireDate < time.Now().Unix() {
 					Rules.mu.RUnlock()
-					log.Println("Expire date reached for port", loopRule.Listen, "pointing to", loopRule.Forward)
+					logVerbose(1, "Expire date reached for port", loopRule.Listen, "pointing to", loopRule.Forward)
 					if err == nil {
 						_ = conn.Close()
 					}
 					saveConfig(conf)
 					break
 				}
-
 				Rules.mu.RUnlock()
+
 				if err != nil {
 					println("Error on accepting connection:", err.Error())
 					continue
@@ -173,9 +175,7 @@ func main() {
 			LastAliveMutex.Lock()
 			for index, i := range LastAlive {
 				if i.LastAccess+timeout < time.Now().Unix() {
-					if Verbose {
-						log.Println("Dropping a dead connection from", (*i.con).RemoteAddr(), ";", index, "; The last accessed time is", time.Unix(i.LastAccess, 0).Format("2006-01-02 15:04:05"))
-					}
+					logVerbose(3, "Dropping a dead connection from", (*i.con).RemoteAddr(), ";", index, "; The last accessed time is", time.Unix(i.LastAccess, 0).Format("2006-01-02 15:04:05"))
 					_ = (*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
 				}
 			}
@@ -212,31 +212,23 @@ func main() {
 }
 
 func saveConfig(config Config) {
-	Rules.mu.RLock() //Lock to clone the rules
+	Rules.mu.RLock() //Lock to read the rules
 	config.Rules = Rules.Rules
-	b, err := json.Marshal(config)
+	b, _ := json.Marshal(config)
 	Rules.mu.RUnlock()
-	if err != nil {
-		log.Println("Error parsing rules: ", err)
-		return
-	}
 
-	err = ioutil.WriteFile(ConfigFileName, b, 0644)
+	err := ioutil.WriteFile(ConfigFileName, b, 0644)
 	if err != nil {
-		log.Println("Error re-writing rules: ", err)
+		logVerbose(1, "Error re-writing rules: ", err)
 	}
-	if Verbose {
-		log.Println("Saved the config")
-	}
+	logVerbose(4, "Saved the config")
 }
 
 func handleRequest(conn net.Conn, index int, r Rule) {
 	//Send a clone of rules to here to avoid need of locking mutex
 	SimultaneousConnections.mu.RLock()
 	if r.Simultaneous != 0 && SimultaneousConnections.SimultaneousConnections[index] >= (r.Simultaneous*2) { //If we have reached quota just terminate the connection; 0 means no limits
-		if Verbose {
-			log.Println("Blocking new connection for port", r.Listen, "because the connection limit is reached. The current active connections count is", SimultaneousConnections.SimultaneousConnections[index]/2)
-		}
+		logVerbose(2, "Blocking new connection for port", r.Listen, "because the connection limit is reached. The current active connections count is", SimultaneousConnections.SimultaneousConnections[index]/2)
 		SimultaneousConnections.mu.RUnlock()
 		_ = conn.Close()
 		return
@@ -245,24 +237,21 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 
 	proxy, err := net.Dial("tcp", r.Forward) //Open a connection to remote host
 	if err != nil {
-		log.Println("Error on dialing remote host:", err.Error())
+		logVerbose(1, "Error on dialing remote host:", err.Error())
 		_ = conn.Close()
 		return
 	}
 
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index] += 2 //Two is added; One for client to server and another for server to client
-	if Verbose {
-		log.Println("Accepting a connection from", conn.RemoteAddr(), "; Now", SimultaneousConnections.SimultaneousConnections[index], "SimultaneousConnections")
-	}
+	logVerbose(4, "Accepting a connection from", conn.RemoteAddr(), "; Now", SimultaneousConnections.SimultaneousConnections[index], "SimultaneousConnections")
+	SimultaneousConnections.mu.Unlock()
 
 	LastAliveMutex.Lock()
 	LastAlive[IndexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
-	LastAliveMutex.Unlock()
-
 	t := IndexerAlive
 	IndexerAlive++
-	SimultaneousConnections.mu.Unlock()
+	LastAliveMutex.Unlock()
 
 	go copyIO(conn, proxy, index, t)
 	go copyIO(proxy, conn, index, t)
@@ -281,8 +270,8 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 		r, err = io.Copy(src, dest)
 	}
 
-	if Verbose && err != nil {
-		log.Println("Error on copyBuffer(Usually happens):", err.Error())
+	if err != nil {
+		logVerbose(4, "Error on copyBuffer(Usually happens):", err.Error())
 	}
 
 	Rules.mu.Lock() //Lock to change the amount of data transferred
@@ -291,15 +280,12 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 
 	SimultaneousConnections.mu.Lock()
 	SimultaneousConnections.SimultaneousConnections[index]-- //This will actually run twice
+	logVerbose(4, "Closing a connection from", src.RemoteAddr(), "; Connections Now:", SimultaneousConnections.SimultaneousConnections[index])
+	SimultaneousConnections.mu.Unlock()
 
 	LastAliveMutex.Lock()
 	delete(LastAlive, aLiveIndex)
 	LastAliveMutex.Unlock()
-
-	if Verbose {
-		log.Println("Closing a connection from", src.RemoteAddr(), "; Connections Now:", SimultaneousConnections.SimultaneousConnections[index])
-	}
-	SimultaneousConnections.mu.Unlock()
 }
 
 func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
@@ -338,4 +324,10 @@ func updateDate(index uint64) {
 		LastAlive[index].LastAccess = time.Now().Unix()
 	}
 	LastAliveMutex.Unlock()
+}
+
+func logVerbose(level int, msg ...interface{}) {
+	if Verbose >= level {
+		log.Println(msg)
+	}
 }
