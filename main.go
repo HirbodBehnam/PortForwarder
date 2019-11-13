@@ -220,8 +220,9 @@ func saveConfig(config Config) {
 	err := ioutil.WriteFile(ConfigFileName, b, 0644)
 	if err != nil {
 		logVerbose(1, "Error re-writing rules: ", err)
+	} else {
+		logVerbose(4, "Saved the config")
 	}
-	logVerbose(4, "Saved the config")
 }
 
 func handleRequest(conn net.Conn, index int, r Rule) {
