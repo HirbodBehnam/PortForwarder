@@ -204,7 +204,7 @@ func main() {
 		<-sigs
 		done <- true
 	}()
-	fmt.Println("Ctrl + C to stop")
+	log.Println("Ctrl + C to stop")
 	<-done
 
 	saveConfig(conf) //Save the config file one last time before exiting
