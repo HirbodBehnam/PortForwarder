@@ -78,4 +78,4 @@ I implemented a custom timeout method for this. It is dead simple:
 Save the last time each _connection_ has transmitted something. (On each write or read function). Then every minute(default), the app reads all of the last transmit time. If it is larger than (now - timeout), close the connection.
 
 ## Other Stuff
-[Persian guild to setup this with mtproto](http://www.mediafire.com/file/4u3khp5oj7ecgxk/%25D9%2585%25D8%25AD%25D8%25AF%25D9%2588%25D8%25AF_%25DA%25A9%25D8%25B1%25D8%25AF%25D9%2586_%25DA%25A9%25D8%25A7%25D8%25B1%25D8%25A8%25D8%25B1%25D8%25A7%25D9%2586.pdf/file)
+[Persian guild to setup this with mtproto](http://rizy.ir/limitUsers)
