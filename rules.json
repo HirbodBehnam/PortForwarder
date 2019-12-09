@@ -9,6 +9,7 @@
       "Simultaneous": 10
     }, 
     {
+      "Name": "PortsNumber2",
       "Listen": 5363,
       "Forward": "8.8.8.8:8080",
       "Quota":9223372036854775807,

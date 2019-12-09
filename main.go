@@ -21,8 +21,9 @@ var Rules CSafeRule
 var ConfigFileName = "rules.json"
 var SimultaneousConnections CSafeConnections
 var Verbose = 1
+var SaveBeforeExit = true
 
-const Version = "1.3.0 / Build 9"
+const Version = "1.3.1 / Build 10"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
@@ -35,6 +36,7 @@ type CSafeRule struct {
 }
 
 type Rule struct {
+	Name         string
 	Listen       uint16
 	Forward      string
 	Quota        int64
@@ -61,9 +63,10 @@ var EnableTimeOut = true
 
 func main() {
 	{ //Parse arguments
-		configFileName := flag.String("config", "rules.json", "The config filename")
-		verbose := flag.Int("verbose", 1, "Verbose level: 0->None(Mostly Silent), 1->Quota reached, expiry date and typical errors, 2->Connection flood 3->Timeout drops 4->All logs and errors")
+		flag.StringVar(&ConfigFileName, "config", "rules.json", "The config filename")
+		flag.IntVar(&Verbose, "verbose", 1, "Verbose level: 0->None(Mostly Silent), 1->Quota reached, expiry date and typical errors, 2->Connection flood 3->Timeout drops 4->All logs and errors")
 		help := flag.Bool("h", false, "Show help")
+		flag.BoolVar(&SaveBeforeExit, "no-exit-save", false, "Set this argument to disable the save of rules before exiting")
 		flag.Parse()
 
 		if *help {
@@ -74,11 +77,11 @@ func main() {
 			os.Exit(0)
 		}
 
-		Verbose = *verbose
 		if Verbose != 0 {
 			fmt.Println("Verbose mode on level", Verbose)
 		}
-		ConfigFileName = *configFileName
+
+		SaveBeforeExit = !SaveBeforeExit
 	}
 
 	//Read config file
@@ -206,8 +209,9 @@ func main() {
 	}()
 	log.Println("Ctrl + C to stop")
 	<-done
-
-	saveConfig(conf) //Save the config file one last time before exiting
+	if SaveBeforeExit {
+		saveConfig(conf) //Save the config file one last time before exiting
+	}
 	log.Println("Exiting")
 }
 

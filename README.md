@@ -25,6 +25,7 @@ Edit the `rules.json` file as you wish. Here is the cheatsheet for it:
 * `Timeout`: The time in seconds that a connection can stay alive without transmitting any data. Default is 15 minutes. Use -1 to disable the timeout.
 * `TimeoutCheck`: The time in seconds to check if connections are still alive. Default is 60 seconds.
 * `Rules` Array: Each element represents a forwarding rule and quota for it.
+    * `Name`: Just a name for this rule. It does not have any effect on the application.
     * `Listen`: The local port to accept the incoming connections for proxy.
     * `Forward`: The address that the traffic must be forwarded to. Enter it like `ip:port`
     * `Quota`: The number of bytes the user can transfer.
@@ -39,8 +40,9 @@ The max quota value is `92233720368547758087`. You can use this.
 ### Arguments
 There are two options:
 1. `-h`: It prints out the help of the proxy.
-2. `-verbose`: Verbose mode (A number between 0 to 4)
-3. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
+2. `--no-exit-save`: Disable the before exit rules saving
+3. `-verbose`: Verbose mode (a number between 0 to 4)
+4. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
 ```bash
 ./PortForwarder --config custom_conf.json
 ```
