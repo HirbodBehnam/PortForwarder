@@ -74,10 +74,5 @@ As soon as the function returns, I the quota will change.
 
 And what do I mean about the softer connections? The client can use the program after the quota is reached. When the client wants to establish a new connection it will be rejected from the server. Plus you can manage how much client has used more than its quota.
 
-### Timeout
-I implemented a custom timeout method for this. It is dead simple:
-
-Save the last time each _connection_ has transmitted something. (On each write or read function). Then every minute(default), the app reads all of the last transmit time. If it is larger than (now - timeout), close the connection.
-
 ## Other Stuff
 [Persian guild to setup this with mtproto](http://rizy.ir/limitUsers)

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -46,20 +47,12 @@ type Rule struct {
 type Config struct {
 	SaveDuration int
 	Timeout      int64
-	TimeoutCheck int
 	Rules        []Rule
 }
 
-type AliveStatus struct {
-	LastAccess int64
-	con        *net.Conn
-}
-
 //Timeout values
-var LastAlive = make(map[uint64]*AliveStatus)
-var LastAliveMutex sync.Mutex
-var IndexerAlive = uint64(0)
 var EnableTimeOut = true
+var TimeoutDuration time.Duration
 
 func main() {
 	{ //Parse arguments
@@ -102,6 +95,9 @@ func main() {
 		if conf.Timeout == -1 {
 			logVerbose(1, "Disabled timeout")
 			EnableTimeOut = false
+		} else {
+			TimeoutDuration = time.Duration(conf.Timeout) * time.Second
+			logVerbose(3, "Set timeout to", TimeoutDuration)
 		}
 	}
 
@@ -156,35 +152,6 @@ func main() {
 			}
 		}(index, rule)
 	}
-
-	//Keep alive status
-	go func() {
-		if !EnableTimeOut {
-			return
-		}
-		//At first check for timeout values; if they are zero assign defaults
-		timeout := conf.Timeout
-		if conf.Timeout == 0 {
-			timeout = 900 //15 minute timeout
-			conf.Timeout = 900
-		}
-		checkDuration := conf.TimeoutCheck
-		if checkDuration == 0 {
-			checkDuration = 60 //Every minute check if the connections are still alive
-			conf.TimeoutCheck = 60
-		}
-		for {
-			time.Sleep(time.Duration(checkDuration) * time.Second)
-			LastAliveMutex.Lock()
-			for index, i := range LastAlive {
-				if i.LastAccess+timeout < time.Now().Unix() {
-					logVerbose(3, "Dropping a dead connection from", (*i.con).RemoteAddr(), ";", index, "; The last accessed time is", time.Unix(i.LastAccess, 0).Format("2006-01-02 15:04:05"))
-					_ = (*i.con).Close() //Close the connection and the copyBuffer method will throw an error; So the values will be saved
-				}
-			}
-			LastAliveMutex.Unlock()
-		}
-	}()
 
 	//Save config file
 	go func() {
@@ -252,17 +219,11 @@ func handleRequest(conn net.Conn, index int, r Rule) {
 	logVerbose(4, "Accepting a connection from", conn.RemoteAddr(), "; Now", SimultaneousConnections.SimultaneousConnections[index], "SimultaneousConnections")
 	SimultaneousConnections.mu.Unlock()
 
-	LastAliveMutex.Lock()
-	LastAlive[IndexerAlive] = &AliveStatus{con: &conn, LastAccess: time.Now().Unix()}
-	t := IndexerAlive
-	IndexerAlive++
-	LastAliveMutex.Unlock()
-
-	go copyIO(conn, proxy, index, t)
-	go copyIO(proxy, conn, index, t)
+	go copyIO(conn, proxy, index)
+	go copyIO(proxy, conn, index)
 }
 
-func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
+func copyIO(src, dest net.Conn, index int) {
 	defer src.Close()
 	defer dest.Close()
 
@@ -270,13 +231,18 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	var err error
 
 	if EnableTimeOut {
-		r, err = copyBuffer(src, dest, aLiveIndex)
+		r, err = copyBuffer(src, dest)
 	} else {
 		r, err = io.Copy(src, dest)
 	}
 
 	if err != nil {
-		logVerbose(4, "Error on copyBuffer(Usually happens):", err.Error())
+		if strings.Contains(err.Error(), "i/o timeout") {
+			logVerbose(3, "A connection timed out from", src.RemoteAddr(), "to", dest.RemoteAddr())
+		} else {
+			logVerbose(4, "Error on copyBuffer(Usually happens):", err.Error())
+		}
+
 	}
 
 	Rules.mu.Lock() //Lock to change the amount of data transferred
@@ -287,19 +253,23 @@ func copyIO(src, dest net.Conn, index int, aLiveIndex uint64) {
 	SimultaneousConnections.SimultaneousConnections[index]-- //This will actually run twice
 	logVerbose(4, "Closing a connection from", src.RemoteAddr(), "; Connections Now:", SimultaneousConnections.SimultaneousConnections[index])
 	SimultaneousConnections.mu.Unlock()
-
-	LastAliveMutex.Lock()
-	delete(LastAlive, aLiveIndex)
-	LastAliveMutex.Unlock()
 }
 
-func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
+func copyBuffer(dst, src net.Conn) (written int64, err error) {
 	buf := make([]byte, 32768)
 	for {
-		go updateDate(index)
+		err = src.SetDeadline(time.Now().Add(TimeoutDuration))
+		if err != nil {
+			logVerbose(1, "cannot set timeout for src")
+			break
+		}
 		nr, er := src.Read(buf)
 		if nr > 0 {
-			go updateDate(index)
+			err = dst.SetDeadline(time.Now().Add(TimeoutDuration))
+			if err != nil {
+				logVerbose(1, "cannot set timeout for dest")
+				break
+			}
 			nw, ew := dst.Write(buf[0:nr])
 			if nw > 0 {
 				written += int64(nw)
@@ -321,14 +291,6 @@ func copyBuffer(dst, src net.Conn, index uint64) (written int64, err error) {
 		}
 	}
 	return written, err
-}
-
-func updateDate(index uint64) {
-	LastAliveMutex.Lock()
-	if _, ok := LastAlive[index]; ok {
-		LastAlive[index].LastAccess = time.Now().Unix()
-	}
-	LastAliveMutex.Unlock()
 }
 
 func logVerbose(level int, msg ...interface{}) {
