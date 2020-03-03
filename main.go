@@ -24,7 +24,7 @@ var SimultaneousConnections CSafeConnections
 var Verbose = 1
 var SaveBeforeExit = true
 
-const Version = "1.3.1 / Build 10"
+const Version = "1.4.0 / Build 11"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
