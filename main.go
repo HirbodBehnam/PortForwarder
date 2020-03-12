@@ -24,7 +24,7 @@ var SimultaneousConnections CSafeConnections
 var Verbose = 1
 var SaveBeforeExit = true
 
-const Version = "1.4.0 / Build 11"
+const Version = "1.4.1 / Build 12"
 
 type CSafeConnections struct {
 	SimultaneousConnections []int
@@ -92,7 +92,7 @@ func main() {
 
 		Rules.Rules = conf.Rules
 		SimultaneousConnections.SimultaneousConnections = make([]int, len(Rules.Rules))
-		if conf.Timeout == -1 {
+		if conf.Timeout <= 0 {
 			logVerbose(1, "Disabled timeout")
 			EnableTimeOut = false
 		} else {
