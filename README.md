@@ -22,8 +22,7 @@ Did you download the executable for your os? Good!
 
 Edit the `rules.json` file as you wish. Here is the cheatsheet for it:
 * `SaveDuration`: The program writes the quotas to disk every `SaveDuration` seconds. Default is 600 seconds or 10 minutes.
-* `Timeout`: The time in seconds that a connection can stay alive without transmitting any data. Default is 15 minutes. Use -1 to disable the timeout.
-* `TimeoutCheck`: The time in seconds to check if connections are still alive. Default is 60 seconds.
+* `Timeout`: The time in seconds that a connection can stay alive without transmitting any data. Default is disabled. Use 0 to disable the timeout.
 * `Rules` Array: Each element represents a forwarding rule and quota for it.
     * `Name`: Just a name for this rule. It does not have any effect on the application.
     * `Listen`: The local port to accept the incoming connections for proxy.
