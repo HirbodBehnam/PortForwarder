@@ -69,7 +69,7 @@ So here is a part you should read. The proxy uses the `io.Copy` function([refere
 
 So what's wrong with this? Well, I can understand how many bytes had been transferred when the function returns. So here comes soft connections and fast forward in cost of inaccuracy.
 
-As soon as the function returns, I the quota will change.
+As soon as the function returns, the quota will change.
 
 And what do I mean about the softer connections? The client can use the program after the quota is reached. When the client wants to establish a new connection it will be rejected from the server. Plus you can manage how much client has used more than its quota.
 
