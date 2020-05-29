@@ -34,7 +34,7 @@ var Verbose = 1
 var SaveBeforeExit = true
 
 // The version of program
-const Version = "1.4.1 / Build 12"
+const Version = "1.4.3 / Build 13"
 
 // A struct to count the active connections on each port
 type CSafeConnections struct {
