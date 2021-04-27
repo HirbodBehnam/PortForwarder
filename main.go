@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -110,7 +109,7 @@ func main() {
 	// Read config file
 	var conf Config
 	{
-		confF, err := ioutil.ReadFile(ConfigFileName)
+		confF, err := os.ReadFile(ConfigFileName)
 		if err != nil {
 			panic("Cannot read the config file. (io Error) " + err.Error())
 		}
@@ -220,7 +219,7 @@ func saveConfig(config Config) {
 	b, _ := json.Marshal(config)
 	Rules.mu.RUnlock()
 
-	err := ioutil.WriteFile(ConfigFileName, b, 0644)
+	err := os.WriteFile(ConfigFileName, b, 0644)
 	if err != nil {
 		logVerbose(1, "Error re-writing rules: ", err)
 	} else {

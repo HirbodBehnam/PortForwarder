@@ -2,9 +2,9 @@
 A small program to port forward with quota options
 ## What is this?
 This a small program to forward ports with a quota option to control the data users use.
-Some of the features of this code are:
+Some features of this code are:
 * **Lightweight**: It has no dependencies, just the main file, and standard library.
-* **Easy to use**: Just edit the rules file and you can use the proxy
+* **Easy to use**: Just edit the rules file, and you can use the proxy
 * **High performance**: With iperf3 I achieved 14.9 Gbits/sec in a local tunnel.
 * **Simultaneous Connections Limit**: Limit the amount of simultaneous _connections_ that a port can have.
 * **Soft Blocking**: Block the new incoming connections and keep the old ones alive when the quota reaches. [Read More](#Soft-Blocking)
@@ -14,7 +14,7 @@ Just head to [releases](https://github.com/HirbodBehnam/PortForwarder/releases) 
 ### Build from source
 Building this is not that hard. At first install [golang](https://golang.org/dl/) for your operating system. Clone this repository and run this command:
 ```bash
-go build main.go
+go build
 ```
 The executable file will be available at the present directory.
 ## How to use it?
@@ -40,7 +40,7 @@ The max quota value is `92233720368547758087`. You can use this.
 There are two options:
 1. `-h`: It prints out the help of the proxy.
 2. `--no-exit-save`: Disable the before exit rules saving
-3. `--verbose`: Verbose mode (a number between 0 to 4)
+3. `--verbose`: Verbose mode (a number between 0 and 4)
 4. `--config`: In case you want to use a config file with another name, just pass it to program as the first argument. For example:
 ```bash
 ./PortForwarder --config custom_conf.json
@@ -56,7 +56,7 @@ You have 5 options
 
 `3` means it also prints a log when a connection timeouts
 
-`4` means it prints every log possible. Use to debug
+`4` means it prints every log possible. Use this to debug
 
 Example:
 ```bash
@@ -65,9 +65,9 @@ Example:
 ## How it works?
 The base code is [this](https://gist.github.com/qhwa/cb9d3851450bff3b705e)(Thanks man!). The code is changed in order to measure the traffic transmitted.
 ### Soft Blocking
-So here is a part you should read. The proxy uses the `io.Copy` function([reference](https://golang.org/pkg/io/#Copy)) in order to write the buffers. The good point is that the buffer is not with me and it is with the golang itself and there is no loop. But there is a catch: This function returns when it reaches the EOF or in case of an error.
+So here is a part you should read. The proxy uses the `io.Copy` function([reference](https://golang.org/pkg/io/#Copy)) in order to write the buffers. The good point is that the buffer is not with me, and it is with the golang itself and there is no loop. But there is a catch: This function returns when it reaches the EOF or in case of an error.
 
-So what's wrong with this? Well, I can understand how many bytes had been transferred when the function returns. So here comes soft connections and fast forward in cost of inaccuracy.
+So what's wrong with this? Well, I can understand how many bytes had been transferred when the function returns. So here comes soft connections and fast-forward in cost of inaccuracy.
 
 As soon as the function returns, the quota will change.
 
