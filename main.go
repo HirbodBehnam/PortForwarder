@@ -216,7 +216,7 @@ func main() {
 func saveConfig(config Config) {
 	Rules.mu.RLock() //Lock to read the rules
 	config.Rules = Rules.Rules
-	b, _ := json.Marshal(config)
+	b, _ := json.MarshalIndent(config, "", "\t")
 	Rules.mu.RUnlock()
 
 	err := os.WriteFile(ConfigFileName, b, 0644)
